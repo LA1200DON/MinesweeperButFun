@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Minesweeper Simulator Deluxe</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+        body {
+            margin: 0;
+            background: radial-gradient(ellipse at top, #232946 0%, #181d2f 100%);
+            color: #f4f4f8;
+            font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+        }
+        #main {
+            flex: 2;
+            padding: 32px 24px;
+        }
+        #upgrades {
+            flex: 1;
+            min-width: 350px;
+            max-width: 400px;
+            padding: 32px 16px 24px 24px;
+            background: linear-gradient(180deg, #141b31 0%, #1a213a 100%);
+            border-left: 3px solid #282c4b;
+            overflow-y: auto;
+            box-shadow: -8px 0 32px #111b;
+        }
+        #stats {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            margin-bottom: 16px;
+        }
+        #stats span {
+            font-size: 1.12em;
+            font-weight: 500;
+            background: #262f54;
+            border-radius: 6px;
+            padding: 6px 14px;
+            box-shadow: 0 2px 8px #1117;
+        }
+        #game {
+            margin-bottom: 20px;
+            min-width: 340px;
+        }
+        table {
+            border-collapse: separate;
+            border-spacing: 6px;
+            margin: 0 auto;
+        }
+        td {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(145deg, #3a4064 60%, #232946 100%);
+            border-radius: 8px;
+            border: none;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 1.18em;
+            font-weight: 700;
+            color: #fff;
+            cursor: pointer;
+            box-shadow: 0 2px 8px #1117;
+            transition: transform 0.12s cubic-bezier(.4,2,.6,.9), background 0.18s, box-shadow 0.13s;
+            user-select: none;
+            position: relative;
+            z-index: 1;
+        }
+        td:hover:not(.revealed):not(.mine):not(.fall) {
+            background: #4c8ef7;
+            color: #fff;
+            transform: scale(1.11);
+            box-shadow: 0 4px 16px #3a9ef9cc;
+        }
+        td.revealed {
+            background: linear-gradient(120deg, #1a1f2f 60%, #2b314b 100%);
+            color: #e5e6ff;
+            cursor: default;
+            box-shadow: 0 2px 10px #191c29aa;
+            animation: popin 0.35s cubic-bezier(.4,2,.6,.9);
+        }
+        @keyframes popin {
+            0% {transform: scale(2.5);}
+            80% {transform: scale(0.8);}
+            100% {transform: scale(1);}
+        }
+        td.fall {
+            animation: fall 0.7s cubic-bezier(.45,2,.35,.9) forwards;
+            z-index: 2;
+        }
+        @keyframes fall {
+            0% {transform: translateY(0) scale(1.2);}
+            15% {transform: scale(1.3);}
+            60% {transform: translateY(30px) scale(1);}
+            100% {transform: translateY(380px) scale(0.8) rotate(45deg);}
+        }
+        td.mine {
+            background: radial-gradient(circle, #ff4c4c 60%, #b81d1d 100%);
+            animation: mineboom 0.4s cubic-bezier(.4,2,.6,.9);
+            color: #fff;
+        }
+        @keyframes mineboom {
+            0% {box-shadow: 0 0 0 0 #ff7d4cab;}
+            80% {box-shadow: 0 0 44px 24px #ff7d4cab;}
+            100% {box-shadow: 0 0 0 0 #ff7d4cab;}
+        }
+        td.flagged {
+            background: linear-gradient(135deg, #2ec498 70%, #23a06d 100%);
+            color: #fffde6;
+        }
+        .explosion-effect {
+            position: absolute;
+            left: 50%; top: 50%;
+            width: 280px; height: 280px;
+            transform: translate(-50%,-50%);
+            pointer-events: none;
+            z-index: 1000;
+            animation: explosion 0.6s cubic-bezier(.6,2,.4,1) forwards;
+        }
+        @keyframes explosion {
+            0% {opacity: 1; transform: scale(0.5) translate(-50%,-50%);}
+            60% {opacity: 1;}
+            100% {opacity: 0; transform: scale(2.3) translate(-50%,-50%);}
+        }
+        .explosion-effect span {
+            position: absolute;
+            width: 20px; height: 20px;
+            border-radius: 50%;
+            background: radial-gradient(#fffad3, #ffdf5a 60%, #ff4c4c 100%);
+            opacity: 0.9;
+            animation: explodefrag 0.7s cubic-bezier(.5,2,.65,.7) forwards;
+        }
+        @keyframes explodefrag {
+            0% {transform: scale(1) translate(0,0);}
+            100% {transform: scale(0.7) translate(var(--tx),var(--ty)); opacity: 0;}
+        }
+        button, input[type="file"] {
+            font-family: inherit;
+            padding: 8px 18px;
+            margin: 10px 0 0 0;
+            font-size: 1.08em;
+            font-weight: 600;
+            background: linear-gradient(95deg, #2cbeff 72%, #7ad4ff 100%);
+            color: #112;
+            border: none;
+            border-radius: 7px;
+            box-shadow: 0 2px 12px #2cbeff33;
+            cursor: pointer;
+            outline: none;
+            transition: background 0.14s, transform 0.13s;
+            position: relative;
+            z-index: 3;
+        }
+        button:active, .upgrade-btn:active {
+            transform: scale(0.96);
+            background: linear-gradient(93deg, #0fa7eb 60%, #2cbeff 100%);
+        }
+        button:disabled {
+            background: #444d;
+            color: #999;
+            cursor: default;
+        }
+        #saveLoadBox {
+            margin-top: 24px;
+        }
+        #saveLoadBox input[type=file] {
+            background: #232946;
+            color: #eee;
+        }
+        #soundBanner {
+            display: none;
+        }
+        #upgradeList {
+            margin-top: 0;
+        }
+        .upgrade {
+            background: linear-gradient(91deg, #202850 40%, #232946 100%);
+            margin: 10px 0;
+            padding: 15px 16px 13px 16px;
+            border-radius: 10px;
+            border: 1px solid #38417c;
+            box-shadow: 0 2px 8px #0c1433cc;
+            position: relative;
+            transition: transform 0.12s;
+        }
+        .upgrade:hover {
+            transform: scale(1.014) translateY(-1px);
+            box-shadow: 0 4px 16px #38b9ff22;
+            z-index: 2;
+        }
+        .upgrade-title {
+            font-weight: bold;
+            color: #ffe059;
+            font-size: 1.08em;
+            margin-bottom: 2px;
+        }
+        .upgrade-desc {
+            font-size: 0.99em;
+            margin: 4px 0 9px 0;
+            color: #e0e5ff;
+        }
+        .upgrade-cost {
+            font-size: 0.97em;
+            color: #bdeaff;
+            margin-bottom: 4px;
+        }
+        .upgrade-btn {
+            background: linear-gradient(97deg, #36e1a8 60%, #21c7a4 100%);
+            color: #114;
+            border-radius: 4px;
+            border: 1px solid #1dc3a0;
+            padding: 5px 14px;
+            font-size: 0.99em;
+            font-weight: 700;
+            margin-top: 6px;
+            margin-bottom: 0;
+            box-shadow: 0 2px 8px #21c7a422;
+            transition: background 0.15s, transform 0.13s;
+        }
+        .upgrade-btn:active {
+            background: linear-gradient(93deg, #1dbe8a 60%, #36e1a8 100%);
+        }
+        .upgrade-btn:disabled {
+            background: #444c;
+            color: #888;
+        }
+        .upgrade-level {
+            display: inline-block;
+            background: #4b8dff;
+            color: #fff;
+            border-radius: 7px;
+            padding: 2px 10px;
+            font-size: 0.99em;
+            margin-left: 10px;
+            margin-top: 1px;
+        }
+        .upgrade-progress {
+            height: 7px;
+            background: linear-gradient(90deg, #84ffd4 20%, #2cbeff 100%);
+            border-radius: 5px;
+            margin: 5px 0 0 0;
+        }
+        #funbar {
+            width: 100%;
+            min-width: 320px;
+            padding: 10px 0 0 0;
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 18px;
+            margin-bottom: 12px;
+        }
+        .fun-feature-btn {
+            background: linear-gradient(92deg, #ffe059 60%, #ffc300 100%);
+            color: #444;
+            border-radius: 8px;
+            padding: 7px 16px;
+            font-size: 0.98em;
+            font-weight: 600;
+            margin-right: 6px;
+            border: 1px solid #ffd70055;
+            box-shadow: 0 2px 8px #ffe05955;
+        }
+        .fun-feature-btn:active {
+            background: linear-gradient(91deg, #ffc300 60%, #ffe059 100%);
+        }
+        #autoplay-popup {
+            position: fixed;
+            left: 50%;
+            top: 20%;
+            transform: translate(-50%,0);
+            background: #2ebf91;
+            color: #fff;
+            border: 2px solid #fff;
+            font-size: 1.12em;
+            padding: 20px 34px;
+            border-radius: 17px;
+            box-shadow: 0 8px 50px #232946bb;
+            font-weight: 700;
+            z-index: 10000;
+            pointer-events: none;
+            animation: popin 0.8s;
+        }
+        #upgrades {
+            scrollbar-width: thin;
+            scrollbar-color: #4b8dff #232946;
+        }
+        #upgrades::-webkit-scrollbar {
+            width: 7px;
+            background: #232946;
+        }
+        #upgrades::-webkit-scrollbar-thumb {
+            background: #4b8dff;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="main">
+        <div id="stats">
+            <span id="coinsSpan">💰 Coins: 0</span>
+            <span id="mineSpan">💣 Mines: 0</span>
+            <span id="levelSpan">🏆 Level: 1</span>
+        </div>
+        <div id="funbar">
+            <button class="fun-feature-btn" id="autoplayBtn" style="display:none;">🤖 Auto Play</button>
+            <button class="fun-feature-btn" id="resetBtn">🔄 Restart</button>
+        </div>
+        <div id="game"></div>
+        <div id="saveLoadBox">
+            <button id="saveBtn">💾 Save Game</button>
+            <input type="file" id="loadFile" style="display:none;" />
+            <button id="loadBtn">📂 Load Game</button>
+        </div>
+    </div>
+    <div id="upgrades">
+        <h2 style="margin-top: 0; font-size: 1.4em; color: #ffe059; letter-spacing: 1px;">Upgrades</h2>
+        <div id="upgradeList"></div>
+    </div>
+    <script>
+        // --- CONFIG ---
+        const BASE_SIZE = 8;
+        const BASE_MINES = 10;
+
+        function getUpgradeDefs() {
+            const upgrades = [];
+            for(let i=0;i<10;i++) upgrades.push({
+                name: `Shiny Numbers ${i+1}`, 
+                desc: `Gain +${i+1} coin per number revealed.`,
+                baseCost: 20 + i * 15, 
+                costMult: 1.22 + i * 0.04, 
+                effect: s => s.coinPerNumber += (i+1)
+            });
+            for(let i=0;i<10;i++) upgrades.push({
+                name: `Blaster Coins ${i+1}`,
+                desc: `Gain +${(i+1)*2} coins per mine exploded.`,
+                baseCost: 35 + i*35,
+                costMult: 1.22 + i*0.05,
+                effect: s => s.coinPerMine += (i+1)*2
+            });
+            for(let i=0;i<5;i++) upgrades.push({
+                name: `Coin Multiplier ${i+1}`,
+                desc: `Coins per number x${(1.2+i*0.2).toFixed(2)}.`,
+                baseCost: 120 + i*100,
+                costMult: 1.55 + i*0.07,
+                effect: s => s.coinMultiplier *= (1.2+i*0.2)
+            });
+            for(let i=0;i<10;i++) upgrades.push({
+                name: `Expand Board ${i+1}`,
+                desc: `Board size +${i+2}`,
+                baseCost: 150 + i*40,
+                costMult: 1.3 + i*0.04,
+                effect: s => s.boardSize += (i+2)
+            });
+            for(let i=0;i<10;i++) upgrades.push({
+                name: `Dangerous Grounds ${i+1}`,
+                desc: `More mines per board (+${(i+1)*2}).`,
+                baseCost: 90 + i*40,
+                costMult: 1.19 + i*0.03,
+                effect: s => s.minesPerBoard += (i+1)*2
+            });
+            for(let i=0;i<10;i++) upgrades.push({
+                name: `Safety Scanner ${i+1}`,
+                desc: `Reveal ${i+1} random safe tile(s) each board.`,
+                baseCost: 60 + i*40,
+                costMult: 1.17 + i*0.02,
+                effect: s => s.revealSafeTiles += (i+1)
+            });
+            for(let i=0;i<10;i++) upgrades.push({
+                name: `Hint Bot ${i+1}`,
+                desc: `Start each board with ${i+1} free hint(s).`,
+                baseCost: 70 + i*40,
+                costMult: 1.18 + i*0.01,
+                effect: s => s.hintsPerBoard += (i+1)
+            });
+            for(let i=0;i<10;i++) upgrades.push({
+                name: `Second Chance ${i+1}`,
+                desc: `Survive ${i+1} mine explosion(s) per board.`,
+                baseCost: 200 + i*90,
+                costMult: 1.4 + i*0.01,
+                effect: s => s.secondChance += (i+1)
+            });
+            for(let i=0;i<10;i++) upgrades.push({
+                name: `Auto-Reveal ${i+1}`,
+                desc: `Auto-reveals ${(i+1)*3}% of safe tiles at start.`,
+                baseCost: 120 + i*42,
+                costMult: 1.22 + i*0.01,
+                effect: s => s.autoRevealBoost += (i+1)*3
+            });
+            for(let i=0;i<10;i++) upgrades.push({
+                name: `Lucky Find ${i+1}`,
+                desc: `${5+i*2}% chance to get double coins per number.`,
+                baseCost: 190 + i*55,
+                costMult: 1.25 + i*0.01,
+                effect: s => s.luckyFind += (5+i*2)
+            });
+            upgrades.push({
+                name: "Auto Play Speed I",
+                desc: "Auto play is 35% faster.",
+                baseCost: 500, costMult: 2,
+                effect: s => s.autoPlaySpeed *= 0.65
+            });
+            upgrades.push({
+                name: "Auto Play Speed II",
+                desc: "Auto play is 50% faster.",
+                baseCost: 1200, costMult: 2,
+                effect: s => s.autoPlaySpeed *= 0.5
+            });
+            upgrades.push({
+                name: "Number Magnet",
+                desc: "50% chance to reveal a number if available.",
+                baseCost: 990, costMult: 2,
+                effect: s => s.revealNumberChance += 0.5
+            });
+            upgrades.push({
+                name: "Super Scan",
+                desc: "Hints are 2x more likely to reveal higher numbers.",
+                baseCost: 1200, costMult: 2,
+                effect: s => s.superScan = true
+            });
+            return upgrades;
+        }
+        const UPGRADE_DEFS = getUpgradeDefs();
+
+        function getInitialState() {
+            return {
+                coins: 0,
+                level: 1,
+                upgrades: Array(UPGRADE_DEFS.length).fill(0),
+                coinPerNumber: 0,
+                coinPerMine: 0,
+                coinMultiplier: 1,
+                boardSize: BASE_SIZE,
+                minesPerBoard: BASE_MINES,
+                revealSafeTiles: 0,
+                hintsPerBoard: 0,
+                hintsLeft: 0,
+                secondChance: 0,
+                secondChanceLeft: 0,
+                autoRevealBoost: 0,
+                luckyFind: 0,
+                board: [],
+                revealed: [],
+                flagged: [],
+                gameOver: false,
+                win: false,
+                minesLeft: BASE_MINES,
+                autoPlay: false,
+                autoPlaySpeed: 1,
+                revealNumberChance: 0,
+                superScan: false
+            };
+        }
+
+        let state = getInitialState();
+
+        function randInt(n) { return Math.floor(Math.random() * n); }
+        function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = randInt(i + 1); [arr[i], arr[j]] = [arr[j], arr[i]]; } }
+        function clamp(x, mi, ma) { return Math.max(mi, Math.min(ma, x)); }
+
+        function startNewBoard() {
+            state.coinPerNumber = 0;
+            state.coinPerMine = 0;
+            state.coinMultiplier = 1;
+            state.boardSize = BASE_SIZE;
+            state.minesPerBoard = BASE_MINES;
+            state.revealSafeTiles = 0;
+            state.hintsPerBoard = 0;
+            state.secondChance = 0;
+            state.autoRevealBoost = 0;
+            state.luckyFind = 0;
+            state.autoPlaySpeed = 1;
+            state.revealNumberChance = 0;
+            state.superScan = false;
+
+            for (let i = 0; i < UPGRADE_DEFS.length; ++i) {
+                let level = state.upgrades[i]||0;
+                for(let k=0;k<level;k++) UPGRADE_DEFS[i].effect(state);
+            }
+
+            const N = clamp(state.boardSize, 6, 32), M = clamp(state.minesPerBoard, 1, Math.floor(N*N*0.6));
+            let board = Array(N).fill(0).map(() => Array(N).fill(0));
+            let revealed = Array(N).fill(0).map(() => Array(N).fill(false));
+            let flagged = Array(N).fill(0).map(() => Array(N).fill(false));
+            let cells = [];
+            for (let i = 0; i < N; ++i) for (let j = 0; j < N; ++j) cells.push([i, j]);
+            shuffle(cells);
+            for (let k = 0; k < M; ++k) {
+                let [i, j] = cells[k];
+                board[i][j] = 'M';
+            }
+            for (let i = 0; i < N; ++i) for (let j = 0; j < N; ++j) {
+                if (board[i][j] === 'M') continue;
+                let cnt = 0;
+                for (let dx = -1; dx <= 1; ++dx) for (let dy = -1; dy <= 1; ++dy) {
+                    let ni = i + dx, nj = j + dy;
+                    if (ni >= 0 && ni < N && nj >= 0 && nj < N && board[ni][nj] === 'M') cnt++;
+                }
+                board[i][j] = cnt;
+            }
+            let safeTiles = [];
+            for (let i = 0; i < N; ++i) for (let j = 0; j < N; ++j) if (board[i][j] !== 'M') safeTiles.push([i, j]);
+            shuffle(safeTiles);
+            for (let x = 0; x < state.revealSafeTiles && x < safeTiles.length; ++x) {
+                let [i, j] = safeTiles[x];
+                revealed[i][j] = true;
+            }
+            if (state.autoRevealBoost > 0) {
+                let count = Math.floor((safeTiles.length * state.autoRevealBoost) / 100);
+                for (let x = 0; x < count && x < safeTiles.length; ++x) {
+                    let [i, j] = safeTiles[x];
+                    revealed[i][j] = true;
+                }
+            }
+            state.hintsLeft = state.hintsLeft || 0;
+            state.hintsLeft += state.hintsPerBoard;
+            state.secondChanceLeft = state.secondChance;
+            state.board = board;
+            state.revealed = revealed;
+            state.flagged = flagged;
+            state.gameOver = false;
+            state.win = false;
+            state.minesLeft = M;
+            setTimeout(() => showBoard(), 10);
+        }
+
+        function revealTile(i, j, isAuto=false) {
+            if (state.revealed[i][j] || state.flagged[i][j] || state.gameOver) return;
+            let N = state.boardSize;
+            state.revealed[i][j] = true;
+            let tile = state.board[i][j];
+            if (typeof tile === "number" && tile > 0) {
+                let coins = (tile + state.coinPerNumber) * state.coinMultiplier;
+                if (Math.random() * 100 < state.luckyFind) coins *= 2;
+                coins = Math.round(coins);
+                animateCoin(i, j, coins);
+                state.coins += coins;
+            }
+            if (tile === 'M') {
+                let coins = (state.coinPerMine) * state.coinMultiplier;
+                if (Math.random() * 100 < state.luckyFind) coins *= 2;
+                coins = Math.round(coins);
+                animateCoin(i, j, coins, true);
+                showExplosion(i, j);
+                setTimeout(()=>{
+                    animateFall();
+                }, 200);
+                if (state.secondChanceLeft > 0) {
+                    state.secondChanceLeft--;
+                } else {
+                    state.gameOver = true;
+                    setTimeout(() => {
+                        showBoard();
+                        setTimeout(()=>{
+                            popup("Boom! You exploded a mine!<br>All numbers fell down!<br>Try again?", "#ff4c4c");
+                            startNewBoard();
+                            updateStats();
+                            showBoard();
+                        }, 1100);
+                    }, 150);
+                    updateStats();
+                    return;
+                }
+            } else if (tile === 0) {
+                let queue = [[i, j]];
+                while (queue.length > 0) {
+                    let [x, y] = queue.pop();
+                    for (let dx = -1; dx <= 1; ++dx) for (let dy = -1; dy <= 1; ++dy) {
+                        let ni = x + dx, nj = y + dy;
+                        if (ni >= 0 && ni < N && nj >= 0 && nj < N && !state.revealed[ni][nj] && state.board[ni][nj] !== 'M') {
+                            state.revealed[ni][nj] = true;
+                            let tile2 = state.board[ni][nj];
+                            if (typeof tile2 === "number" && tile2 > 0) {
+                                let coins = (tile2 + state.coinPerNumber) * state.coinMultiplier;
+                                if (Math.random() * 100 < state.luckyFind) coins *= 2;
+                                coins = Math.round(coins);
+                                animateCoin(ni, nj, coins);
+                                state.coins += coins;
+                            }
+                            if (state.board[ni][nj] === 0) queue.push([ni, nj]);
+                        }
+                    }
+                }
+            }
+            checkWin();
+            updateStats();
+        }
+
+        function flagTile(i, j) {
+            if (state.revealed[i][j] || state.gameOver) return;
+            state.flagged[i][j] = !state.flagged[i][j];
+            let flaggedCount = 0, N = state.boardSize;
+            for (let x = 0; x < N; ++x)
+                for (let y = 0; y < N; ++y)
+                    if (state.flagged[x][y]) flaggedCount++;
+            state.minesLeft = Math.max(0, state.minesPerBoard - flaggedCount);
+            showBoard();
+            updateStats();
+        }
+
+        function checkWin() {
+            let N = state.boardSize, M = state.minesPerBoard;
+            let unrevealed = 0;
+            for (let i = 0; i < N; ++i)
+                for (let j = 0; j < N; ++j)
+                    if (!state.revealed[i][j] && state.board[i][j] !== 'M') unrevealed++;
+            if (unrevealed === 0 && !state.gameOver) {
+                state.win = true;
+                winBoard();
+            }
+        }
+
+        function winBoard() {
+            state.level++;
+            state.hintsLeft = (state.hintsLeft || 0) + 1;
+            setTimeout(() => {
+                popup("Board cleared!<br>+1 Hint!<br>Next level...", "#7dfb7d");
+                startNewBoard();
+                updateStats();
+                showBoard();
+            }, 230);
+        }
+
+        function useHint() {
+            if (state.hintsLeft <= 0 || state.gameOver) return;
+            let N = state.boardSize;
+            let unrevealed = [];
+            if(state.superScan){
+                let maxNum = 0;
+                for (let i = 0; i < N; ++i)
+                    for (let j = 0; j < N; ++j)
+                        if (!state.revealed[i][j] && state.board[i][j] !== 'M' && state.board[i][j]>0)
+                            maxNum = Math.max(maxNum, state.board[i][j]);
+                for (let i = 0; i < N; ++i)
+                    for (let j = 0; j < N; ++j)
+                        if (!state.revealed[i][j] && state.board[i][j] === maxNum)
+                            unrevealed.push([i, j]);
+                if(unrevealed.length === 0) for (let i = 0; i < N; ++i)
+                    for (let j = 0; j < N; ++j)
+                        if (!state.revealed[i][j] && state.board[i][j] !== 'M')
+                            unrevealed.push([i, j]);
+            } else {
+                for (let i = 0; i < N; ++i) for (let j = 0; j < N; ++j)
+                    if (!state.revealed[i][j] && state.board[i][j] !== 'M') unrevealed.push([i, j]);
+            }
+            if (unrevealed.length === 0) return;
+            let [x, y] = unrevealed[randInt(unrevealed.length)];
+            revealTile(x, y);
+            state.hintsLeft--;
+            showBoard();
+            updateStats();
+        }
+
+        function showBoard() {
+            let N = state.boardSize;
+            let tbl = document.createElement('table');
+            tbl.style.position = "relative";
+            for (let i = 0; i < N; ++i) {
+                let tr = document.createElement('tr');
+                for (let j = 0; j < N; ++j) {
+                    let td = document.createElement('td');
+                    td.setAttribute('data-i', i);
+                    td.setAttribute('data-j', j);
+                    if (state.revealed[i][j]) {
+                        td.className = 'revealed';
+                        if (state.board[i][j] === 'M') {
+                            td.classList.add('mine');
+                            td.textContent = '💥';
+                        } else if (state.board[i][j] > 0) {
+                            td.textContent = state.board[i][j];
+                            td.style.color = ['#4b8dff', '#39e072', '#e04c4c', '#ffe059', '#b97aff'][state.board[i][j] % 5];
+                        }
+                    } else if (state.flagged[i][j]) {
+                        td.className = 'flagged';
+                        td.textContent = '🚩';
+                    } else {
+                        td.textContent = '';
+                        td.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            animateButton(td);
+                            revealTile(i, j);
+                            showBoard();
+                            updateStats();
+                        });
+                        td.addEventListener('contextmenu', (e) => {
+                            e.preventDefault();
+                            animateButton(td);
+                            flagTile(i, j);
+                        });
+                    }
+                    tr.appendChild(td);
+                }
+                tbl.appendChild(tr);
+            }
+            let gameDiv = document.getElementById('game');
+            gameDiv.innerHTML = '';
+            gameDiv.appendChild(tbl);
+
+            let hintBtn = document.createElement('button');
+            hintBtn.textContent = `✨ Use Hint (${state.hintsLeft||0})`;
+            hintBtn.disabled = (state.hintsLeft || 0) <= 0 || state.gameOver;
+            hintBtn.onclick = (e) => { animateButton(hintBtn); useHint(); };
+            gameDiv.appendChild(document.createElement('br'));
+            gameDiv.appendChild(hintBtn);
+        }
+
+        function animateButton(btn) {
+            btn.style.transition = "transform 0.13s";
+            btn.style.transform = "scale(0.93)";
+            setTimeout(() => btn.style.transform = "scale(1)", 110);
+        }
+
+        function animateCoin(i, j, amount, isMine) {
+            let gameDiv = document.getElementById('game');
+            let tbl = gameDiv.querySelector("table");
+            if (!tbl) return;
+            let tds = tbl.querySelectorAll("td");
+            let N = state.boardSize;
+            let idx = i * N + j;
+            let td = tds[idx];
+            if (!td) return;
+            let coin = document.createElement('div');
+            coin.textContent = (isMine ? "💣+" : "💰+") + amount;
+            coin.style.position = "absolute";
+            coin.style.left = (td.offsetLeft + 2) + "px";
+            coin.style.top = (td.offsetTop - 10) + "px";
+            coin.style.pointerEvents = "none";
+            coin.style.fontSize = "1.1em";
+            coin.style.fontWeight = "800";
+            coin.style.background = isMine ? "#ff4c4c" : "#ffe059";
+            coin.style.color = isMine ? "#fff" : "#312";
+            coin.style.borderRadius = "8px";
+            coin.style.padding = "2px 8px";
+            coin.style.zIndex = 99;
+            coin.style.boxShadow = "0 2px 16px #0007";
+            coin.style.transition = "transform 0.7s cubic-bezier(.4,2,.5,.9), opacity 0.7s";
+            tbl.parentNode.appendChild(coin);
+            setTimeout(() => {
+                coin.style.transform = "translateY(-52px) scale(1.2)";
+                coin.style.opacity = "0";
+            }, 20);
+            setTimeout(() => { if(coin.parentNode) coin.parentNode.removeChild(coin); }, 700);
+        }
+
+        function showExplosion(i, j) {
+            let gameDiv = document.getElementById('game');
+            let tbl = gameDiv.querySelector("table");
+            if (!tbl) return;
+            let tds = tbl.querySelectorAll("td");
+            let N = state.boardSize;
+            let idx = i * N + j;
+            let td = tds[idx];
+            let box = document.createElement('div');
+            box.className = "explosion-effect";
+            let cx = td.offsetLeft + td.offsetWidth/2;
+            let cy = td.offsetTop + td.offsetHeight/2;
+            box.style.left = (td.offsetLeft + td.offsetWidth/2) + "px";
+            box.style.top = (td.offsetTop + td.offsetHeight/2) + "px";
+            for(let n=0;n<15;n++) {
+                let frag = document.createElement('span');
+                let angle = Math.PI*2 * (n/15), dist = 60 + Math.random()*80;
+                let tx = Math.cos(angle)*dist, ty = Math.sin(angle)*dist;
+                frag.style.setProperty("--tx", tx+"px");
+                frag.style.setProperty("--ty", ty+"px");
+                box.appendChild(frag);
+            }
+            tbl.parentNode.appendChild(box);
+            setTimeout(()=>{ if(box.parentNode) box.parentNode.removeChild(box); },600);
+        }
+
+        function animateFall() {
+            let gameDiv = document.getElementById('game');
+            let tbl = gameDiv.querySelector("table");
+            if (!tbl) return;
+            let tds = tbl.querySelectorAll("td");
+            let N = state.boardSize;
+            for(let i=0;i<N;i++) for(let j=0;j<N;j++) {
+                if (state.revealed[i][j] && typeof state.board[i][j]==="number" && state.board[i][j]>0) {
+                    let idx = i*N+j;
+                    let td = tds[idx];
+                    td.classList.add("fall");
+                }
+            }
+            setTimeout(showBoard, 800);
+        }
+
+        function popup(msg, color) {
+            let pop = document.createElement('div');
+            pop.id = "autoplay-popup";
+            pop.style.background = color || "#282e5d";
+            pop.innerHTML = msg;
+            document.body.appendChild(pop);
+            setTimeout(()=>pop.style.opacity="0.98",10);
+            setTimeout(()=>{ if(pop.parentNode) pop.parentNode.removeChild(pop); }, 1600);
+        }
+
+        function updateStats() {
+            document.getElementById('coinsSpan').textContent = `💰 Coins: ${state.coins}`;
+            document.getElementById('mineSpan').textContent = `💣 Mines: ${state.minesLeft}`;
+            document.getElementById('levelSpan').textContent = `🏆 Level: ${state.level}`;
+            showUpgrades();
+            let unlocked = allUpgradesMaxed();
+            document.getElementById('autoplayBtn').style.display = unlocked ? "inline-block" : "none";
+        }
+
+        function showUpgrades() {
+            let ul = document.getElementById('upgradeList');
+            ul.innerHTML = '';
+            for (let i = 0; i < UPGRADE_DEFS.length; ++i) {
+                let up = UPGRADE_DEFS[i];
+                let bought = state.upgrades[i]||0;
+                let cost = getUpgradeCost(i, bought);
+                let div = document.createElement('div');
+                div.className = 'upgrade';
+                let title = document.createElement('div');
+                title.className = 'upgrade-title';
+                title.textContent = up.name;
+                let upgradeLevel = document.createElement('span');
+                upgradeLevel.className = "upgrade-level";
+                upgradeLevel.textContent = "Lv " + bought;
+                title.appendChild(upgradeLevel);
+                let desc = document.createElement('div');
+                desc.className = 'upgrade-desc';
+                desc.textContent = up.desc;
+                let costDiv = document.createElement('div');
+                costDiv.className = 'upgrade-cost';
+                if(bought>=999) costDiv.textContent = "(MAX)";
+                else costDiv.textContent = `Cost: ${cost} coins`;
+                let btn = document.createElement('button');
+                btn.className = 'upgrade-btn';
+                btn.textContent = bought>=999 ? "MAXED" : "Upgrade";
+                btn.disabled = state.coins < cost || bought>=999;
+                btn.onclick = () => {
+                    animateButton(btn);
+                    if (state.coins >= cost && bought<999) {
+                        state.coins -= cost;
+                        state.upgrades[i]++;
+                        updateStats();
+                        showBoard();
+                    }
+                };
+                div.appendChild(title);
+                div.appendChild(desc);
+                div.appendChild(costDiv);
+                div.appendChild(btn);
+                let prog = document.createElement('div');
+                prog.className = "upgrade-progress";
+                prog.style.width = Math.min(100, (bought/24*100))+"%";
+                div.appendChild(prog);
+                ul.appendChild(div);
+            }
+        }
+
+        function getUpgradeCost(i, bought) {
+            let up = UPGRADE_DEFS[i];
+            bought = bought || 0;
+            return Math.round(up.baseCost * Math.pow(up.costMult, bought));
+        }
+
+        function allUpgradesMaxed() {
+            return state.upgrades.every(n=>n>0);
+        }
+
+        function saveGame() {
+            let saveData = {
+                coins: state.coins,
+                level: state.level,
+                upgrades: state.upgrades,
+                hintsLeft: state.hintsLeft||0
+            };
+            let dataStr = JSON.stringify(saveData);
+            let blob = new Blob([dataStr], {type: "application/json"});
+            let url = URL.createObjectURL(blob);
+            let a = document.createElement('a');
+            a.href = url;
+            a.download = 'minesweeper_sim_save.json';
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+        function loadGameFromFile(file) {
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    let obj = JSON.parse(e.target.result);
+                    if (typeof obj.coins === 'number' && Array.isArray(obj.upgrades) && typeof obj.level === 'number') {
+                        state = getInitialState();
+                        state.coins = obj.coins;
+                        state.level = obj.level;
+                        state.upgrades = obj.upgrades.slice(0, UPGRADE_DEFS.length);
+                        if(typeof obj.hintsLeft === "number") state.hintsLeft = obj.hintsLeft;
+                        startNewBoard();
+                        updateStats();
+                        showBoard();
+                    } else {
+                        popup("Invalid save file.", "#e04c4c");
+                    }
+                } catch (e) {
+                    popup("Error loading save: " + e, "#e04c4c");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        let autoplayTimer = null;
+        function autoplay() {
+            if (state.autoPlay) return;
+            state.autoPlay = true;
+            let speed = Math.max(120, 350*state.autoPlaySpeed);
+            function doAuto() {
+                if (!state.autoPlay || state.gameOver) {
+                    state.autoPlay = false;
+                    return;
+                }
+                let N = state.boardSize;
+                let unrevealed = [];
+                if (state.revealNumberChance && Math.random()<state.revealNumberChance) {
+                    for (let i = 0; i < N; ++i) for (let j = 0; j < N; ++j)
+                        if (!state.revealed[i][j] && state.board[i][j] > 0) unrevealed.push([i,j]);
+                }
+                if (unrevealed.length===0) {
+                    for (let i = 0; i < N; ++i) for (let j = 0; j < N; ++j)
+                        if (!state.revealed[i][j] && state.board[i][j] !== 'M') unrevealed.push([i,j]);
+                }
+                if (unrevealed.length === 0) {
+                    state.autoPlay = false;
+                    popup('Auto Play: Done!','linear-gradient(90deg,#7dfb7d,#4b8dff)');
+                    return;
+                }
+                let [x, y] = unrevealed[randInt(unrevealed.length)];
+                revealTile(x, y, true);
+                showBoard();
+                updateStats();
+                if (state.autoPlay && !state.gameOver) autoplayTimer = setTimeout(doAuto, speed);
+            }
+            popup('Auto Play: Go!','linear-gradient(90deg,#6be8e8,#4b8dff)');
+            doAuto();
+        }
+        function stopAutoplay(){
+            state.autoPlay = false;
+            if(autoplayTimer) clearTimeout(autoplayTimer);
+            popup("Auto Play: Stopped","#ffe059");
+        }
+
+        function resetGame() {
+            state = getInitialState();
+            startNewBoard();
+            updateStats();
+            showBoard();
+            popup('Game Reset!','#ffe059');
+        }
+
+        document.getElementById('saveBtn').onclick = ()=>{animateButton(document.getElementById('saveBtn')); saveGame();};
+        document.getElementById('loadBtn').onclick = ()=>{animateButton(document.getElementById('loadBtn')); document.getElementById('loadFile').click();};
+        document.getElementById('loadFile').onchange = function(e) {
+            if (e.target.files.length > 0) loadGameFromFile(e.target.files[0]);
+        };
+        document.getElementById('autoplayBtn').onclick = ()=>{
+            animateButton(document.getElementById('autoplayBtn'));
+            if(state.autoPlay) {stopAutoplay(); return;}
+            autoplay();
+        };
+        document.getElementById('resetBtn').onclick = ()=>{animateButton(document.getElementById('resetBtn')); resetGame();};
+
+        startNewBoard();
+        updateStats();
+        showBoard();
+    </script>
+</body>
+</html>
